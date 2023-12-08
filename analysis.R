@@ -16,7 +16,7 @@
 rm(list=ls())
 pkgs <- c("mgcv", "knitr", "multcomp", "coin", "colorspace", "ggplot2", 
           "data.table", "tidyverse", "vegan","sf","gridExtra","scales",
-		  "ggeffects","ggforce","raster","viridis","ggnewscale","ggdensity") 
+		  "ggeffects","ggforce","raster","viridis","ggnewscale","ggdensity","lme4") 
 
 inst <- pkgs %in% installed.packages()
 if (any(inst)) install.packages(pkgs[!inst])
@@ -53,13 +53,13 @@ data_org$fyear <- factor(yr, levels = lev, labels = lev)
 
 
 #FIGURE 1 of the answer:
-shp=st_read("C:/Users/Duchenne/Downloads/NUTS_RG_20M_2021_3035.shp") #available here: https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts#nuts21
+shp=st_read("NUTS_RG_20M_2021_3035.shp") #available here: https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts#nuts21
 shp=subset(shp,LEVL_CODE==0)
 shp=st_transform(shp,crs=4326)
 
 margin_map=1
 
-r <- raster("C:/Users/Duchenne/Downloads/hfp-europe-geo-grid/hfp-europe-geo-grid/hfp_Europe_grid/hfp_europe/hdr.adf") #available here: https://sedac.ciesin.columbia.edu/data/set/wildareas-v2-human-footprint-geographic/data-download
+r <- raster("hfp-europe-geo-grid/hfp-europe-geo-grid/hfp_Europe_grid/hfp_europe/hdr.adf") #available here: https://sedac.ciesin.columbia.edu/data/set/wildareas-v2-human-footprint-geographic/data-download
 x <- c(xmin=min(data_org$E)-margin_map-1,xmax=max(data_org$E)+margin_map+1)
 y <- c(ymin=min(data_org$N)-margin_map-1,ymax=56+1)
 xy <- cbind(x,y)
@@ -70,7 +70,7 @@ r2=as.data.frame(rasterToPoints(r))
 ################################################################################################################ FIGURE 1
 pl1=ggplot(data=data_org,aes(x=fyear,y=biomass_adj/(todaynr-fromdaynr),fill=dataset))+geom_boxplot()+
 theme_bw()+theme(panel.grid=element_blank(),plot.title=element_text(size=14,face="bold",hjust = 0),
-legend.position="none",panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=90))+
+legend.position="none",panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=90,vjust=0.5))+
 ggtitle("a")+
 xlab("Years")+ylab("Biomass (g per day)")+
 scale_x_discrete(breaks=c(1989:2015, "2016t", "2016v", 2017:2022),drop=F)+
@@ -82,7 +82,7 @@ geom_point(data=data_org,aes(x=E,y=N,fill=dataset),color="black",shape=21,alpha=
 theme_bw()+theme(panel.grid=element_blank(),plot.title=element_text(size=14,face="bold",hjust = 0),
 legend.position="none",panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=90),
 axis.title=element_blank())+
-ggtitle("c")+
+ggtitle("b")+
 scale_color_manual(values=c("#0B4F6C","#CBB9A8"))+scale_fill_manual(values=c("#0B4F6C","#CBB9A8"))+coord_sf(expand=F)
 
 pl3=ggplot()+geom_raster(data=r2,aes(x=x,y=y,fill=hfp_europe))+
@@ -98,7 +98,7 @@ theme_bw()+
 theme(panel.grid=element_blank(),plot.title=element_text(size=14,face="bold",hjust = 0),
 legend.position="bottom",panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=90),
 axis.title=element_blank())+
-ggtitle("d")+coord_sf(expand=F)
+ggtitle("c")+coord_sf(expand=F)
 
 #' Centering the variables precipitation and temperature during sampling on the mean value  
 #' (Temp 16.263, Prec 26.87)
@@ -140,7 +140,7 @@ pre$dataset=c("training","validation")
 pl4=ggplot(data=pre,aes(x=dataset,y=exp(fit)/10,color=dataset))+geom_pointrange(aes(ymin=exp(fit-1.96*se.fit)/10,ymax=exp(fit+1.96*se.fit)/10))+
 theme_bw()+theme(panel.grid=element_blank(),plot.title=element_text(size=14,face="bold",hjust = 0),
 legend.position="none",panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=0))+
-ggtitle("b")+
+ggtitle("d")+
 xlab("")+ylab("Biomass (g per day)")+
 scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),labels = trans_format("log10", math_format(10^.x)))+
 scale_color_manual(values=c("#0B4F6C","#CBB9A8"))+scale_fill_manual(values=c("#0B4F6C","#CBB9A8"))
@@ -148,7 +148,7 @@ scale_color_manual(values=c("#0B4F6C","#CBB9A8"))+scale_fill_manual(values=c("#0
 
 
 pdf("Fig1.pdf",width=9,height=5)
-grid.arrange(pl1,pl4,pl2,pl3,layout_matrix=rbind(c(1,2,3),c(1,2,4)),widths=c(2.5,1,1),heights=c(1,1.3))
+grid.arrange(pl1,pl2,pl3,pl4,layout_matrix=rbind(c(1,2,4),c(1,3,4)),widths=c(2.5,1,1),heights=c(1,1.3))
 dev.off();
 
 ################################################################################################################ TABLE 1
@@ -157,6 +157,7 @@ dev.off();
 #' Data published in Hallmann et al. (2017) PLoS One 12: e0185809
 dim(training <- subset(data_org, dataset == "training"))
 training$year <- as.double(training$year)
+training$year_c=training$year-mean(training$year)
 #' Own data published partly Uhler et al (2021) Nat Commun. 12(1):5946, 
 #' Uhler et al. (2022) Insect Conservation and Diversity 10.1111/icad.12604, 
 #' Busse et al. (2022) Insect Conservation and Diversity 10.1111/icad.12592
@@ -183,6 +184,9 @@ model5 <- gam(biomass ~ s(meandaynr) + offset(log(todaynr - fromdaynr)) + s(E, N
 obj1=summary(model5)
 res1=data.frame(Estimate=obj1$p.coeff,se=obj1$se[1:length(obj1$p.coeff)],pval=obj1$p.pv,aic=AIC(model5),resq=obj1$r.sq,varia=names(obj1$p.coeff))
 AIC(model5)
+
+
+
 
 #' **New Model:** with weather anomalies AND year
 cor(training[,c("year_c","Tmean_c","Psum_c","Tmean_anomaly_april_current","Psum_anomaly_april_current","Tmean_anomaly_april_prev",
@@ -223,23 +227,8 @@ resf$varia=factor(resf$varia,levels=c("(Intercept)","nHerbs","nTrees","Light","e
 resf=resf[order(resf$varia),]
 fwrite(resf,"table_1.csv")
 
-
-############################################
-newdat=training
-newdat$nHerbs=mean(training$nHerbs)
-newdat$nTrees=mean(training$nTrees) 
-newdat$Light=mean(training$Light)
-newdat$ellenTemperature=mean(training$ellenTemperature)
-newdat$Arableland=mean(training$Arableland)
-newdat$Forest=mean(training$Forest)
-newdat$Grassland=mean(training$Grassland)
-newdat$Water=mean(training$Water)
-
-pre1=as.data.frame(predict(modelbis,type="response",newdata=newdat,se.fit=TRUE))
-newdat$partial_resid=newdat$biomass-pre1$fit
-
-
 ####### AIC CHANGE WHEN REMOVING EACH VARIABLE
+
 variables=all.vars(formula(modelbis))[-1]
 variables=variables[!(variables %in% c("E", "N", "meandaynr"))]
 expla=attr(terms(modelbis), "term.labels")
@@ -289,7 +278,7 @@ pre1$fit=pre1$fit-mean(predict(modelbis,newdata=newdat,type="response"))
 #REFITING THE MODEL INCLUDING THE MORE RECENT DATA (VALIDATION DATA) AND PREDICTING
 modelbiswithall <- gam(biomass ~ s(meandaynr) + offset(log(todaynr - fromdaynr)) + s(E, N, bs = "tp") +
 							   s(site,bs="re") +
-							   year_c+dataset+
+							   year_c+
                                Tmean_c * Psum_c + 
                                Tmean_anomaly_april_current * Psum_anomaly_april_current + 
                                Tmean_anomaly_april_prev * Psum_anomaly_april_prev + 
@@ -308,18 +297,18 @@ Psum_anomaly_april_current=mean(data_org$Psum_anomaly_april_current),
 Tmean_anomaly_april_prev=mean(data_org$Tmean_anomaly_april_prev),Psum_anomaly_april_prev =mean(data_org$Psum_anomaly_april_prev),
 Tmean_anomaly_winter=mean(data_org$Tmean_anomaly_winter),Psum_anomaly_winter =mean(data_org$Psum_anomaly_winter),
 Tmean_anomaly_meandaynr_prev=mean(data_org$Tmean_anomaly_meandaynr_prev),Psum_anomaly_meandaynr_prev =mean(data_org$Psum_anomaly_meandaynr_prev),
-year_c=1989:2022- mean(data_org$year),todaynr=10,fromdaynr=0,E=mean(data_org$E),N=mean(data_org$N),site=data_org$site)
+year_c=1989:2022-mean(data_org$year),todaynr=10,fromdaynr=0,E=mean(data_org$E),N=mean(data_org$N),site=0)
 
 pre2=as.data.frame(predict(modelbiswithall,type="response",newdata=newdata,se.fit=TRUE))
-pre2$dataset2="data_org+validation"
+pre2$dataset2="training+validation"
 
 #compute partial residuals
 newdat=data_org
 newdat$year_c=0
-data_org$partial_resid=data_org$biomass-predict(modelbiswithall,newdata=newdat,type="response")
-data_org$dataset2="data_org+validation"
+data_org$partial_resid=data_org$biomass-predict(modelbiswithall,newdata=newdat,type="response",exclude="s(site)")
+data_org$dataset2="training+validation"
 #correct the predicts to get partial predicts
-pre2$fit=pre2$fit-mean(predict(modelbiswithall,type="response",newdata=newdata))
+pre2$fit=pre2$fit-mean(predict(modelbiswithall,type="response",newdata=newdata,exclude="s(site)"))
 
 ##### PUT TOGETHER PREDICTIONS
 pref=rbind(pre1,pre2)
@@ -327,15 +316,13 @@ pref$year=c(1989:2016,1989:2022)
 
 #PLOT PREDICTIONS
 
-one_over_trans = function() trans_new("one_over", function(x) log(x+abs(min(x))))
-
 pl3=ggplot()+
 geom_point(data=training,aes(x=year,y=partial_resid/10),color="#0B4F6C",alpha=0.3)+
 geom_point(data=data_org,aes(x=year,y=partial_resid/10),color="#CBB9A8",alpha=0.3)+
 geom_ribbon(data=pref,aes(x=year,ymin=fit/10-1.96*se.fit/10,ymax=fit/10+1.96*se.fit/10,fill=dataset2),alpha=0.2)+
 geom_line(data=pref,aes(x=year,y=fit/10,color=dataset2),size=1.2)+
 theme_bw()+theme(panel.grid=element_blank(),plot.title=element_text(size=14,face="bold",hjust = 0),
-legend.position="right",panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=90))+
+legend.position="right",panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=0))+
 ggtitle("a")+
 xlab("Years")+ylab("Partial residuals of biomass (g per day)")+
 scale_color_manual(values=c("#0B4F6C","#CBB9A8"))+scale_fill_manual(values=c("#0B4F6C","#CBB9A8"))+
@@ -346,3 +333,82 @@ pl3
 dev.off();
 
 
+#######################################################  ESTIMATE FOR TEMPORAL TREND
+
+newdata=data.frame(meandaynr=mean(training$meandaynr),nHerbs=mean(training$nHerbs),nTrees =mean(training$nTrees ),
+Light=mean(training$Light),ellenTemperature=mean(training$ellenTemperature),Arableland=mean(training$Arableland),
+Forest=mean(training$Forest),
+Grassland =mean(training$Grassland),Water=mean(training$Water),Tmean_c=mean(training$Tmean_c),Psum_c=mean(training$Psum_c),
+Tmean_anomaly_april_current=training$Tmean_anomaly_april_current,
+Psum_anomaly_april_current=training$Psum_anomaly_april_current,
+Tmean_anomaly_april_prev=training$Tmean_anomaly_april_prev,Psum_anomaly_april_prev =training$Psum_anomaly_april_prev,
+Tmean_anomaly_winter=training$Tmean_anomaly_winter,Psum_anomaly_winter =training$Psum_anomaly_winter,
+Tmean_anomaly_meandaynr_prev=training$Tmean_anomaly_meandaynr_prev,Psum_anomaly_meandaynr_prev=training$Psum_anomaly_meandaynr_prev,
+year_c=mean(training$year_c),todaynr=10,fromdaynr=0,E=mean(training$E),N=mean(training$N))
+
+newdata1=cbind(newdata,as.data.frame(predict(modelbis,type="response",newdata=newdata,se.fit=TRUE)))
+newdata1$year=training$year
+
+model1=gam(fit ~ year,family = gaussian(link = "log"), method = METHOD, data = newdata1)
+b1=as.data.frame(ggpredict(model1,tem="year")$year)
+
+pl4=ggplot()+geom_point(data=newdata1,aes(x=year,y=fit/10),color="hotpink2",alpha=0.1)+
+geom_ribbon(data=b1,aes(x=x,ymin=conf.low/10,ymax=conf.high/10),alpha=0.2,fill="hotpink4")+
+geom_line(data=b1,aes(x=x,y=predicted/10),size=1.2,col="hotpink4")+theme_bw()+theme(panel.grid=element_blank(),plot.title=element_text(size=14,face="bold",hjust = 0),
+legend.position="right",panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=0))+
+ggtitle("a")+
+xlab("Years")+ylab("Biomass predicted by weather conditions only\n(g per day)")
+
+newdata=data.frame(meandaynr=mean(training$meandaynr),nHerbs=training$nHerbs,nTrees =training$nTrees,
+Light=mean(training$Light),ellenTemperature=mean(training$ellenTemperature),Arableland=training$Arableland,
+Forest=training$Forest,
+Grassland =training$Grassland,Water=training$Water,Tmean_c=mean(training$Tmean_c),Psum_c=mean(training$Psum_c),
+Tmean_anomaly_april_current=mean(training$Tmean_anomaly_april_current),
+Psum_anomaly_april_current=mean(training$Psum_anomaly_april_current),
+Tmean_anomaly_april_prev=mean(training$Tmean_anomaly_april_prev),Psum_anomaly_april_prev =mean(training$Psum_anomaly_april_prev),
+Tmean_anomaly_winter=mean(training$Tmean_anomaly_winter),Psum_anomaly_winter =mean(training$Psum_anomaly_winter),
+Tmean_anomaly_meandaynr_prev=mean(training$Tmean_anomaly_meandaynr_prev),Psum_anomaly_meandaynr_prev =mean(training$Psum_anomaly_meandaynr_prev),
+year_c=mean(training$year_c),todaynr=10,fromdaynr=0,E=mean(training$E),N=mean(training$N))
+
+newdata2=cbind(newdata,as.data.frame(predict(model5,type="response",newdata=newdata,se.fit=TRUE)))
+newdata2$year=training$year
+model2=gam(fit ~ year,family = gaussian(link = "log"), method = METHOD, data = newdata2)
+b2=as.data.frame(ggpredict(model2,tem="year")$year)
+
+summary(model2)
+
+pl5=ggplot()+geom_point(data=newdata2,aes(x=year,y=fit/10),color="chartreuse3",alpha=0.1)+
+geom_ribbon(data=b2,aes(x=x,ymin=conf.low/10,ymax=conf.high/10),alpha=0.2,fill="chartreuse4")+
+geom_line(data=b2,aes(x=x,y=predicted/10),size=1.2,col="chartreuse4")+theme_bw()+theme(panel.grid=element_blank(),plot.title=element_text(size=14,face="bold",hjust = 0),
+legend.position="right",panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=0))+
+ggtitle("b")+
+xlab("Years")+ylab("Biomass predicted by habitats conditions only\n(g per day)")
+
+
+exp(summary(model1)$p.coeff[2]+c(0,-1.96*summary(model1)$se[2],1.96*summary(model1)$se[2]))-1
+
+exp(summary(model2)$p.coeff[2]+c(0,-1.96*summary(model2)$se[2],1.96*summary(model2)$se[2]))-1
+
+plot_grid(pl4,pl5,align="hv",ncol=2)
+
+pdf("Fig3.pdf",width=9,height=4)
+plot_grid(pl4,pl5,align="hv",ncol=2)
+dev.off();
+
+
+
+
+
+
+
+
+
+
+modelvif <- lm(biomass ~ poly(meandaynr,2) + offset(log(todaynr - fromdaynr)) + nHerbs + nTrees + Light + ellenTemperature +
+                               Arableland + Forest + Grassland + Water +
+							   year_c+
+                               Tmean_c * Psum_c + 
+                               Tmean_anomaly_april_current * Psum_anomaly_april_current + 
+                               Tmean_anomaly_april_prev * Psum_anomaly_april_prev + 
+                               Tmean_anomaly_winter * Psum_anomaly_winter + 
+                               Tmean_anomaly_meandaynr_prev * Psum_anomaly_meandaynr_prev,data=training)

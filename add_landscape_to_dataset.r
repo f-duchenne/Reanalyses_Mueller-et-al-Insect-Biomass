@@ -16,7 +16,7 @@
 rm(list=ls())
 pkgs <- c("mgcv", "knitr", "multcomp", "coin", "colorspace", "ggplot2", 
           "data.table", "tidyverse", "vegan","sf","gridExtra","scales",
-		  "ggeffects","ggforce","raster","viridis","ggnewscale","ggdensity") 
+		  "ggeffects","ggforce","raster","viridis","ggnewscale","ggdensity","terra") 
 
 inst <- pkgs %in% installed.packages()
 if (any(inst)) install.packages(pkgs[!inst])
@@ -51,8 +51,112 @@ yr[v16] <- "2016v"
 lev <- c(1989:2015, "2016t", "2016v", 2017:2022)
 data_org$fyear <- factor(yr, levels = lev, labels = lev)
 
-
-
-coords=vector(unique(data_org[,c("plot","E","N")]),crs=4326)
-
+#load corine rasters
+cor1990=rast("D:/land use change/corine_raster_100m_europe/U2000_CLC1990_V2020_20u1.tif")
+cor2000=rast("D:/land use change/corine_raster_100m_europe/U2006_CLC2000_V2020_20u1.tif")
+cor2006=rast("D:/land use change/corine_raster_100m_europe/U2012_CLC2006_V2020_20u1.tif")
+cor2012=rast("D:/land use change/corine_raster_100m_europe/U2018_CLC2012_V2020_20u1.tif")
 cor2018=rast("D:/land use change/corine_raster_100m_europe/U2018_CLC2018_V2020_20u1.tif")
+activeCat(cor1990)<-5
+activeCat(cor2000)<-5
+activeCat(cor2006)<-5
+activeCat(cor2012)<-5
+activeCat(cor2018)<-5
+
+###points to extract
+coords=vect(unique(data_org[,c("plot","E","N")]),geom=c("E","N"),crs=crs("EPSG:4326"))
+coords=project(coords,crs(cor2018))
+coord=as.data.frame(coords,geom="XY")
+coord$ID=1:nrow(coord)
+
+tab18=extract(cor2018,buffer(coords,width=1000))
+tab18=merge(tab18,coord,by="ID")
+tab18$year=2018
+names(tab18)[names(tab18)=="CODE_18"]="code_hab"
+tab18$code_hab=as.numeric(as.character(tab18$code_hab))
+tab18$hab_s[tab18$code_hab>=100 & tab18$code_hab<200]="Urban"
+tab18$hab_s[tab18$code_hab>=311 & tab18$code_hab<=313]="Forest"
+tab18$hab_s[tab18$code_hab>=321 & tab18$code_hab<400]="Other semi-natural hab."
+tab18$hab_s[tab18$code_hab>=211 & tab18$code_hab<=241]="Crops"
+tab18$hab_s[tab18$code_hab %in% c(231,242,243,244)]="Other agricultural lands"
+tab18$hab_s[tab18$code_hab>=400]="Water and wetlands"
+tab18=tab18 %>% group_by(plot,year) %>% mutate(nbcells=length(hab_s))
+
+
+tab12=extract(cor2012,buffer(coords,width=1000))
+tab12=merge(tab12,coord,by="ID")
+tab12$year=2012
+names(tab12)[names(tab12)=="CODE_12"]="code_hab"
+tab12$code_hab=as.numeric(as.character(tab12$code_hab))
+tab12$hab_s[tab12$code_hab>=100 & tab12$code_hab<200]="Urban"
+tab12$hab_s[tab12$code_hab>=311 & tab12$code_hab<=313]="Forest"
+tab12$hab_s[tab12$code_hab>=321 & tab12$code_hab<400]="Other semi-natural hab."
+tab12$hab_s[tab12$code_hab>=211 & tab12$code_hab<=241]="Crops"
+tab12$hab_s[tab12$code_hab %in% c(231,242,243,244)]="Other agricultural lands"
+tab12$hab_s[tab12$code_hab>=400]="Water and wetlands"
+tab12=tab12 %>% group_by(plot,year) %>% mutate(nbcells=length(hab_s))
+
+tab06=extract(cor2006,buffer(coords,width=1000))
+tab06=merge(tab06,coord,by="ID")
+tab06$year=2006
+names(tab06)[names(tab06)=="CODE_06"]="code_hab"
+tab06$code_hab=as.numeric(as.character(tab06$code_hab))
+tab06$hab_s[tab06$code_hab>=100 & tab06$code_hab<200]="Urban"
+tab06$hab_s[tab06$code_hab>=311 & tab06$code_hab<=313]="Forest"
+tab06$hab_s[tab06$code_hab>=321 & tab06$code_hab<400]="Other semi-natural hab."
+tab06$hab_s[tab06$code_hab>=211 & tab06$code_hab<=241]="Crops"
+tab06$hab_s[tab06$code_hab %in% c(231,242,243,244)]="Other agricultural lands"
+tab06$hab_s[tab06$code_hab>=400]="Water and wetlands"
+tab06=tab06 %>% group_by(plot,year) %>% mutate(nbcells=length(hab_s))
+
+tab00=extract(cor2000,buffer(coords,width=1000))
+tab00=merge(tab00,coord,by="ID")
+tab00$year=2000
+names(tab00)[names(tab00)=="CODE_00"]="code_hab"
+tab00$code_hab=as.numeric(as.character(tab00$code_hab))
+tab00$hab_s[tab00$code_hab>=100 & tab00$code_hab<200]="Urban"
+tab00$hab_s[tab00$code_hab>=311 & tab00$code_hab<=313]="Forest"
+tab00$hab_s[tab00$code_hab>=321 & tab00$code_hab<400]="Other semi-natural hab."
+tab00$hab_s[tab00$code_hab>=211 & tab00$code_hab<=241]="Crops"
+tab00$hab_s[tab00$code_hab %in% c(231,242,243,244)]="Other agricultural lands"
+tab00$hab_s[tab00$code_hab>=400]="Water and wetlands"
+tab00=tab00 %>% group_by(plot,year) %>% mutate(nbcells=length(hab_s))
+
+tab90=extract(cor1990,buffer(coords,width=1000))
+tab90=merge(tab90,coord,by="ID")
+tab90$year=1990
+names(tab90)[names(tab90)=="CODE_90"]="code_hab"
+tab90$code_hab=as.numeric(as.character(tab90$code_hab))
+tab90$hab_s[tab90$code_hab>=100 & tab90$code_hab<200]="Urban"
+tab90$hab_s[tab90$code_hab>=311 & tab90$code_hab<=313]="Forest"
+tab90$hab_s[tab90$code_hab>=321 & tab90$code_hab<400]="Other semi-natural hab."
+tab90$hab_s[tab90$code_hab>=211 & tab90$code_hab<=241]="Crops"
+tab90$hab_s[tab90$code_hab %in% c(231,242,243,244)]="Other agricultural lands"
+tab90$hab_s[tab90$code_hab>=400]="Water and wetlands"
+tab90=tab90 %>% group_by(plot,year) %>% mutate(nbcells=length(hab_s))
+
+tabf=rbind(tab90,tab00,tab06,tab12,tab18)
+
+b=tabf %>% group_by(plot,year,hab_s) %>% summarise(prop_hab=length(hab_s)/mean(nbcells))
+
+lili=unique(b[,c("plot","hab_s")])
+tabf=NULL
+for(i in 1:nrow(lili)){
+model=glm(prop_hab~year,data=b[b$plot==lili$plot[i] & b$hab_s==lili$hab_s[i],],family="quasibinomial")
+newdata=data.frame(plot=lili$plot[i],hab_s=lili$hab_s[i],year=1987:2022)
+newdata=cbind(newdata,predict(model,type="response",newdata=newdata))
+tabf=rbind(tabf,newdata)
+}
+
+names(tabf)[4]="fit"
+tabff=dcast(tabf,plot+year~hab_s,value.var="fit",fill=0)
+
+fwrite(tabff,"landscape.csv")
+
+
+
+lands=fread("landscape.csv")
+names(lands)=gsub(" ","_",names(lands))
+names(lands)=gsub("-","",names(lands))
+names(lands)[4]=paste0(names(lands)[4],"_l")
+data_org=merge(data_org,lands,by=c("plot","year"))

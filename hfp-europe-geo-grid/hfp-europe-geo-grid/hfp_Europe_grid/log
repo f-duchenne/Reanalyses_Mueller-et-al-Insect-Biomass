@@ -1,0 +1,9 @@
+200812091410   0     0     0mjaiteh EUSG2 = shift (EUSG, -29.625052988,25.9893154452, 0.00833333)
+200812091413   0     0     0mjaiteh EUSG3 = shift (EUSG, -29.625052988,25.9976487752, 0.00833333)
+200812091414   0     1     0mjaiteh EU_NEW = merge(eusg3,EUNG)
+200812091415   7     1     0mjaiteh grid
+200812091418   1    32     0mjaiteh EU_NEW2 = merge(eusg3,EUN)
+200812091429   0     2     0mjaiteh EUN2 = eun
+200812091432   0     3     0mjaiteh EUROPE2 = merge( EUN2, EUSG2)
+200812091433   0     4     0mjaiteh EUROPE2 = merge( EUN2, EUSG3)
+200812091441  24    41     0mjaiteh grid
