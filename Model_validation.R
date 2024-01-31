@@ -257,7 +257,7 @@ validation2=rbind(validation2,validation2b,validation2c)
 validation2$model2=factor(validation2$model2,levels=c("Muller et al.", "Muller et al. + year","Muller et al. + RE","Muller et al. + year*habitat"))
 
 pl3=ggplot()+geom_point(data=validation2,aes(x=weather,y=bm,color=as.factor(year)))+
-facet_wrap(~model2,ncol=3)+
+facet_wrap(~model2,ncol=3,scale="free_x")+
 stat_cor(data=validation2,aes(x=weather,y=bm,color=as.factor(year),label = ..r.label..),method ="pearson",
 output.type ="expression",show_guide  = FALSE,cor.coef.name="R",label.y.npc = "bottom",label.x.npc = "centre")+
 stat_cor(data=validation2,aes(x=weather,y=bm,label = ..r.label..),method ="pearson",
@@ -265,7 +265,7 @@ output.type ="expression",show_guide  = FALSE,cor.coef.name="R",label.y.npc = "t
 scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),labels = trans_format("log10", math_format(10^.x)))+
 theme_bw()+theme(panel.grid=element_blank(),plot.title=element_text(size=14,face="bold",hjust = 0),
 panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=0),strip.background=element_blank(),legend.position="none")+
-xlab("Linear combination of weather and habitats conditions")+ylab("Biomass (g per day)")+labs(color="Year")+scale_color_colorblind()+ggtitle("")
+xlab("Linear combination of weather and habitat conditions")+ylab("Biomass (g per day)")+labs(color="Year")+scale_color_colorblind()+ggtitle("")
 
 
 
