@@ -44,13 +44,6 @@ METHOD <- "REML"  ### or "GCV.Cp"
 #' Reading all data including published data by Hallmann et al. (2017) PLoS One 12: e0185809 until 2016 (data_org) 
 #' and new data collected by our own in 2016, 2019, 2020, 2022 (validation)
 data_org <-read.csv2("Data_Update_Revision_spells.csv", header = TRUE)
-pesti=fread("pesticides.csv")
-model=gam(pesticide~s(year),data=pesti)#family=quasibinomial)
-plot(model)
-data_org$pesticide_pre=predict(model,newdata=data_org)
-data_org=merge(data_org,pesti,by="year",all.x=T,all.y=F)
-data_org$pesticide[is.na(data_org$pesticide)]=pesti$pesticide[pesti$year==1995]
-
 
 #' Setup factor coding for year (for plots only)
 yr <- as.character(data_org$year)
@@ -113,7 +106,7 @@ dim(validation <- subset(data_org, dataset == "validation"))
 model5 <- gam(biomass ~ s(meandaynr) + offset(log(todaynr - fromdaynr)) + s(E, N, bs = "tp") +
                                nHerbs + nTrees + Light + ellenTemperature +
                                Arableland + Forest + Grassland + Water + 
-                               Tmean_c * Psum_c +
+                               Tmean_c * Psum_c + 
                                Tmean_anomaly_april_current * Psum_anomaly_april_current + 
                                Tmean_anomaly_april_prev * Psum_anomaly_april_prev + 
                                Tmean_anomaly_winter * Psum_anomaly_winter + 
@@ -158,23 +151,6 @@ modelbis <- gam(biomass ~ s(meandaynr) + offset(log(todaynr - fromdaynr)) + s(E,
 obj=summary(modelbis)
 res2=data.frame(Estimate=obj$p.coeff,se=obj$se[1:length(obj$p.coeff)],pval=obj$p.pv,aic=AIC(modelbis),resq=obj$r.sq,varia=names(obj$p.coeff))
 AIC(modelbis)
-
-
-modelbis_with_interaction <- gam(biomass ~ s(meandaynr) + offset(log(todaynr - fromdaynr)) + s(E, N, bs = "tp") +
-                               nHerbs + nTrees + Light + ellenTemperature +
-                               Arableland + Forest + Grassland + Water +
-							   year_c*(Grassland+Forest+Arableland)+year_c:meandaynr+year_c:I(meandaynr^2)+
-                               Tmean_c * Psum_c + 
-                               Tmean_anomaly_april_current * Psum_anomaly_april_current + 
-                               Tmean_anomaly_april_prev * Psum_anomaly_april_prev + 
-                               Tmean_anomaly_winter * Psum_anomaly_winter + 
-                               Tmean_anomaly_meandaynr_prev * Psum_anomaly_meandaynr_prev,
-                      family = gaussian(link = "log"), 
-                      method = METHOD, 
-                      data = training)
-summary(modelbis_with_interaction)
-AIC(modelbis_with_interaction)
-
 
 #TABLE 1
 resf=merge(res1,res2,by="varia",all=T)

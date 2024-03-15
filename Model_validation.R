@@ -44,17 +44,6 @@ METHOD <- "REML"  ### or "GCV.Cp"
 #' Reading all data including published data by Hallmann et al. (2017) PLoS One 12: e0185809 until 2016 (data_org) 
 #' and new data collected by our own in 2016, 2019, 2020, 2022 (validation)
 data_org <-read.csv2("Data_Update_Revision_spells.csv", header = TRUE)
-pesti=fread("pesticides.csv")
-model=gam(pesticide~s(year),data=pesti)#family=quasibinomial)
-plot(model)
-data_org$pesticide_pre=predict(model,newdata=data_org)
-data_org=merge(data_org,pesti,by="year",all.x=T,all.y=F)
-data_org$pesticide[is.na(data_org$pesticide)]=pesti$pesticide[pesti$year==1995]
-landscape=fread("landscape.csv")
-names(landscape)=gsub(" ","_",names(landscape))
-dim(data_org)
-data_org=merge(data_org,landscape,by=c("plot","year"))
-dim(data_org)
 
 #' Setup factor coding for year (for plots only)
 yr <- as.character(data_org$year)
@@ -64,7 +53,8 @@ v16 <- which(yr == "2016" & data_org$dataset == "validation")
 yr[v16] <- "2016v"
 lev <- c(1989:2015, "2016t", "2016v", 2017:2022)
 data_org$fyear <- factor(yr, levels = lev, labels = lev)
-
+data_org$year_bin="others"
+data_org$year_bin[data_org$fyear==2022]="2022"
 
 #FIGURE 1 of the answer:
 shp=st_read("NUTS_RG_20M_2021_3035.shp") #available here: https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts#nuts21
@@ -116,7 +106,7 @@ dim(validation <- subset(data_org, dataset == "validation"))
 #' **Model 5:** with weather anomalies instead of year
 model5 <- gam(biomass ~ s(meandaynr) + offset(log(todaynr - fromdaynr)) + s(E, N, bs = "tp") +
                                nHerbs + nTrees + Light + ellenTemperature +
-                               Crops+Forest.y+Other_agricultural_lands+Water_and_wetlands+
+                               Arableland + Forest + Grassland + Water + 
                                Tmean_c * Psum_c +
                                Tmean_anomaly_april_current * Psum_anomaly_april_current + 
                                Tmean_anomaly_april_prev * Psum_anomaly_april_prev + 
@@ -132,7 +122,7 @@ AIC(model5)
 
 modelbis <- gam(biomass ~ s(meandaynr) + offset(log(todaynr - fromdaynr)) + s(E, N, bs = "tp") +
                                nHerbs + nTrees + Light + ellenTemperature +
-                               Crops+Forest.y+Other_agricultural_lands+Water_and_wetlands+
+                               Arableland + Forest + Grassland + Water + 
 							   year_c+
                                Tmean_c * Psum_c + 
                                Tmean_anomaly_april_current * Psum_anomaly_april_current + 
@@ -146,40 +136,12 @@ obj=summary(modelbis)
 res2=data.frame(Estimate=obj$p.coeff,se=obj$se[1:length(obj$p.coeff)],pval=obj$p.pv,aic=AIC(modelbis),resq=obj$r.sq,varia=names(obj$p.coeff))
 AIC(modelbis)
 
-
-modelbis_with_interaction <- gam(biomass ~ s(meandaynr) + offset(log(todaynr - fromdaynr)) + s(E, N, bs = "tp") +
-                               nHerbs + nTrees + Light + ellenTemperature +
-                               Crops+Forest.y+Other_agricultural_lands+Water_and_wetlands+
-							   year_c*(Crops+Forest.y+Other_agricultural_lands)+year_c:meandaynr+year_c:I(meandaynr^2)+
-                               Tmean_c * Psum_c +
-                               Tmean_anomaly_april_current * Psum_anomaly_april_current + 
-                               Tmean_anomaly_april_prev * Psum_anomaly_april_prev + 
-                               Tmean_anomaly_winter * Psum_anomaly_winter + 
-                               Tmean_anomaly_meandaynr_prev * Psum_anomaly_meandaynr_prev,
-                      family = gaussian(link = "log"), 
-                      method = METHOD, 
-                      data = training)
-summary(modelbis_with_interaction)
-AIC(modelbis_with_interaction)
-
-
-#TABLE 1
-resf=merge(res1,res2,by="varia",all=T)
-resf$varia=factor(resf$varia,levels=c("(Intercept)","nHerbs","nTrees","Light","ellenTemperature","Arableland","Forest","Grassland","Water",
-"Tmean_c","Psum_c","Tmean_c:Psum_c",
-"Tmean_anomaly_winter","Psum_anomaly_winter","Tmean_anomaly_winter:Psum_anomaly_winter",
-"Tmean_anomaly_april_current","Psum_anomaly_april_current","Tmean_anomaly_april_current:Psum_anomaly_april_current",                   
-"Tmean_anomaly_april_prev","Psum_anomaly_april_prev","Tmean_anomaly_april_prev:Psum_anomaly_april_prev",
-"Tmean_anomaly_meandaynr_prev","Psum_anomaly_meandaynr_prev","Tmean_anomaly_meandaynr_prev:Psum_anomaly_meandaynr_prev"))
-resf=resf[order(resf$varia),]
-fwrite(resf,"table_1.csv")
-
 ################################################################################################################ FIGURE 1
 #' Assessing stability of results: Add year as random effect #Model from Muller et al.
 hallmann_plus_RE <- gam(biomass ~ s(meandaynr) + offset(log(todaynr - fromdaynr)) + s(E, N, bs = "tp") +
                                s(fyear, bs = "re") +  ### add temporal random effect
                                nHerbs + nTrees + Light + ellenTemperature +
-                               Crops+Forest.y+Other_agricultural_lands+Water_and_wetlands+
+                               Arableland + Forest + Grassland + Water + 
                                Tmean_c * Psum_c+
                                Tmean_anomaly_april_current * Psum_anomaly_april_current + 
                                Tmean_anomaly_april_prev * Psum_anomaly_april_prev + 
@@ -197,11 +159,13 @@ summary(hallmann_plus_RE)
 #' Predict single effects from model5 model for later validation data
 X <- predict(model5, newdata = validation, type = "terms",se.fit=T)
 #' Aggregate contributions by weather variables
-wvar <- c(grep("^[TP]", colnames(X$fit)),which(colnames(X$fit) %in% c("Crops","Forest.y","Other_agricultural_lands","Water_and_wetlands")))
+#wvar <- c(grep("^[TP]", colnames(X$fit)),which(colnames(X$fit) %in% c("Crops","Forest.y","Other_agricultural_lands","Water_and_wetlands")))
+wvar2 <- c(grep("^[TP]", colnames(X$fit)))
 #' Combine all terms with weather and weather anomalies into a new variable
 #' This defines the waether score
 validation2b=validation
-validation2b$weather <-  rowSums(X$fit[, c(wvar)])
+validation2b$weather <-  rowSums(X$fit[, c(wvar2)])
+#validation2b$weatherhab <-  rowSums(X$fit[, c(wvar)])
 validation2b$model2="Muller et al."
 #Observed biomass per day
 validation2b$logbm <- log(validation2b$biomass_adj/(validation2b$todaynr - validation2b$fromdaynr))
@@ -211,11 +175,13 @@ validation2b$plot <- factor(validation2b$plot)
 #' Predict single effects from model5 model for later validation data
 X <- predict(modelbis, newdata = validation, type = "terms",se.fit=T)
 #' Aggregate contributions by weather variables
-wvar <- c(grep("^[TP]", colnames(X$fit)),which(colnames(X$fit) %in% c("Crops","Forest.y","Other_agricultural_lands","Water_and_wetlands")))
+#wvar <- c(grep("^[TP]", colnames(X$fit)),which(colnames(X$fit) %in% c("Crops","Forest.y","Other_agricultural_lands","Water_and_wetlands")))
+wvar2 <- c(grep("^[TP]", colnames(X$fit)))
 #' Combine all terms with weather and weather anomalies into a new variable
 #' This defines the waether score
 validation2=validation
-validation2$weather <-  rowSums(X$fit[, c(wvar)])
+validation2$weather <-  rowSums(X$fit[, c(wvar2)])
+#validation2$weatherhab <-  rowSums(X$fit[, c(wvar)])
 validation2$model2="Muller et al. + year"
 #Observed biomass per day
 validation2$logbm <- log(validation2$biomass_adj/(validation2$todaynr - validation2$fromdaynr))
@@ -225,30 +191,18 @@ validation2$plot <- factor(validation2$plot)
 #' Predict single effects from model5 model for later validation data
 X <- predict(hallmann_plus_RE, newdata = validation, type = "terms",se.fit=T)
 #' Aggregate contributions by weather variables
-wvar <- c(grep("^[TP]", colnames(X$fit)),which(colnames(X$fit) %in% c("Crops","Forest.y","Other_agricultural_lands","Water_and_wetlands")))
+#wvar <- c(grep("^[TP]", colnames(X$fit)),which(colnames(X$fit) %in% c("Crops","Forest.y","Other_agricultural_lands","Water_and_wetlands")))
+wvar2 <- c(grep("^[TP]", colnames(X$fit)))
 #' Combine all terms with weather and weather anomalies into a new variable
 #' This defines the waether score
 validation2c=validation
-validation2c$weather <-  rowSums(X$fit[, c(wvar)])
+validation2c$weather <-  rowSums(X$fit[, c(wvar2)])
+#validation2c$weatherhab <-  rowSums(X$fit[, c(wvar)])
 validation2c$model2="Muller et al. + RE"
 #Observed biomass per day
 validation2c$logbm <- log(validation2c$biomass_adj/(validation2c$todaynr - validation2c$fromdaynr))
 validation2c$bm <- validation2c$biomass_adj/(validation2c$todaynr - validation2c$fromdaynr)
 validation2c$plot <- factor(validation2c$plot)
-
-#' Predict single effects from model5 model for later validation data
-X <- predict(modelbis_with_interaction, newdata = validation, type = "terms",se.fit=T)
-#' Aggregate contributions by weather variables
-wvar <- c(grep("^[TP]", colnames(X$fit)),which(colnames(X$fit) %in% c("Crops","Forest.y","Other_agricultural_lands","Water_and_wetlands")))
-#' Combine all terms with weather and weather anomalies into a new variable
-#' This defines the waether score
-validation2d=validation
-validation2d$weather <-  rowSums(X$fit[, c(wvar)])
-validation2d$model2="Muller et al. + year*habitat"
-#Observed biomass per day
-validation2d$logbm <- log(validation2d$biomass_adj/(validation2d$todaynr - validation2d$fromdaynr))
-validation2d$bm <- validation2d$biomass_adj/(validation2d$todaynr - validation2d$fromdaynr)
-validation2d$plot <- factor(validation2d$plot)
 
 #model modified
 spearman_test(weather ~ logbm | plot, data = validation2)
@@ -256,24 +210,36 @@ spearman_test(weather ~ logbm | plot, data = validation2)
 validation2=rbind(validation2,validation2b,validation2c)
 validation2$model2=factor(validation2$model2,levels=c("Muller et al.", "Muller et al. + year","Muller et al. + RE","Muller et al. + year*habitat"))
 
+
 pl3=ggplot()+geom_point(data=validation2,aes(x=weather,y=bm,color=as.factor(year)))+
 facet_wrap(~model2,ncol=3,scale="free_x")+
-stat_cor(data=validation2,aes(x=weather,y=bm,color=as.factor(year),label = ..r.label..),method ="pearson",
+stat_cor(data=validation2,aes(x=weather,y=bm,color=as.factor(year),label = ..r.label..),method ="spearman",
 output.type ="expression",show_guide  = FALSE,cor.coef.name="R",label.y.npc = "bottom",label.x.npc = "centre")+
-stat_cor(data=validation2,aes(x=weather,y=bm,label = ..r.label..),method ="pearson",
+stat_cor(data=validation2,aes(x=weather,y=bm,label = ..r.label..),method ="spearman",
 output.type ="expression",show_guide  = FALSE,cor.coef.name="R",label.y.npc = "top",label.x.npc = "left",color="darkgrey")+
 scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),labels = trans_format("log10", math_format(10^.x)))+
 theme_bw()+theme(panel.grid=element_blank(),plot.title=element_text(size=14,face="bold",hjust = 0),
 panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=0),strip.background=element_blank(),legend.position="none")+
-xlab("Linear combination of weather and habitat conditions")+ylab("Biomass (g per day)")+labs(color="Year")+scale_color_colorblind()+ggtitle("")
+xlab("Linear combination of weather condition effects")+ylab("Biomass (g per day)")+labs(color="Year")+scale_color_colorblind()+ggtitle("a")
+
+
+pl4=ggplot()+geom_point(data=subset(validation2,year!=2022),aes(x=weather,y=bm,color=as.factor(year)))+
+facet_wrap(~model2,ncol=3,scale="free_x")+
+stat_cor(data=subset(validation2,year!=2022),aes(x=weather,y=bm,color=as.factor(year),label = ..r.label..),method ="spearman",
+output.type ="expression",show_guide  = FALSE,cor.coef.name="R",label.y.npc = "bottom",label.x.npc = "centre")+
+stat_cor(data=subset(validation2,year!=2022),aes(x=weather,y=bm,label = ..r.label..),method ="spearman",
+output.type ="expression",show_guide  = FALSE,cor.coef.name="R",label.y.npc = "top",label.x.npc = "left",color="darkgrey")+
+scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),labels = trans_format("log10", math_format(10^.x)))+
+theme_bw()+theme(panel.grid=element_blank(),plot.title=element_text(size=14,face="bold",hjust = 0),
+panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=0),strip.background=element_blank(),legend.position="none")+
+xlab("Linear combination of weather condition effects")+ylab("Biomass (g per day)")+labs(color="Year")+scale_color_colorblind()+ggtitle("b")
 
 
 
-pdf("Fig3.pdf",width=10,height=4)
-pl3
+plot_grid(pl3,pl4,ncol=1)
+
+pdf("Fig3.pdf",width=9,height=7)
+plot_grid(pl3,pl4,ncol=1)
 dev.off();
-
-
-
 
 
