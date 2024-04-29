@@ -64,19 +64,16 @@ coords=as.data.frame(terra::disagg(centroids(shp)),geom="XY")
 data_org$nuts_id=terra::extract(shp,obj)$NUTS_ID
 yields=fread("Final_data.csv")
 yields=merge(yields,coords[,c("NUTS_ID","x","y")],by.x="nuts_id",by.y="NUTS_ID",all.x=T,all.y=F)
-crop_sel=c("sugarbeet")
-yields2=dcast(subset(yields,var %in% crop_sel),...~measure,value.var="value")
+yields2=dcast(subset(yields,var == "sugarbeet"),...~measure,value.var="value")
 yields2 = yields2 %>% group_by(district_no,district,nuts_id,x,y,var) %>% mutate(yield_moy=mean(yield,na.rm=T))
 yields2 = yields2 %>% group_by(year,district_no,district,nuts_id,x,y,var,area) %>% summarise(yield=yield)
 
 #predictin missing values
 yields2$value_pre=NA
-for (i in crop_sel){
 train=na.omit(as.data.frame(yields2)[,c("x","y","nuts_id","yield","year")])
 model_predict=randomForest(yield~year+x+y+nuts_id,data=train)
 yields2$value_pre=predict(model_predict,yields2)
 plot(value_pre~yield,data=yields2)
-}
 yields2$value_pre[!is.na(yields2$yield)]=yields2$yield[!is.na(yields2$yield)]
 yields2=yields2 %>% group_by(var) %>% mutate(value_pre_scale=scale(value_pre))
 
