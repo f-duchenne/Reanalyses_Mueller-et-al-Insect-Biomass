@@ -24,6 +24,7 @@ while(length(mu_phen[mu_phen>365 | mu_phen<0])>0){
 mu_phen[mu_phen>365]=mu_phen[mu_phen>365]-365
 mu_phen[mu_phen<0]=365+mu_phen[mu_phen<0]
 }
+mu_phen=runif(nbsp_a+nbsp_p,-2.5,2.5)
 sd_phen=runif(nbsp_a+nbsp_p,-2.5,2.5)
 
 #morpho
