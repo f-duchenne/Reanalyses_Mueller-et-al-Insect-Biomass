@@ -57,6 +57,7 @@ data_org$fyear <- factor(yr, levels = lev, labels = lev)
 
 #YIELDS PER DISTRICT
 shp=vect("NUTS_RG_20M_2021_3035.shp") #available here: https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts#nuts21
+crs(shp)="EPSG:3035"
 shp=subset(shp,shp$LEVL_CODE==3)
 obj=vect(data_org,geom=c("E","N"),crs="EPSG:4326")
 obj=project(obj,crs(shp))
@@ -64,25 +65,27 @@ coords=as.data.frame(terra::disagg(centroids(shp)),geom="XY")
 data_org$nuts_id=terra::extract(shp,obj)$NUTS_ID
 yields=fread("Final_data.csv")
 yields=merge(yields,coords[,c("NUTS_ID","x","y")],by.x="nuts_id",by.y="NUTS_ID",all.x=T,all.y=F)
-yields2=dcast(subset(yields,var == "sugarbeet"),...~measure,value.var="value")
-yields2 = yields2 %>% group_by(district_no,district,nuts_id,x,y,var) %>% mutate(yield_moy=mean(yield,na.rm=T))
-yields2 = yields2 %>% group_by(year,district_no,district,nuts_id,x,y,var,area) %>% summarise(yield=yield)
+yields2=dcast(subset(yields,var %in% c("sugarbeet")),...~measure,value.var="value")
 
 #predictin missing values
 yields2$value_pre=NA
 train=na.omit(as.data.frame(yields2)[,c("x","y","nuts_id","yield","year")])
 model_predict=randomForest(yield~year+x+y+nuts_id,data=train)
+train$value_pre=predict(model_predict,train)
+caret::RMSE(train$value_pre,train$yield)
+
 yields2$value_pre=predict(model_predict,yields2)
 plot(value_pre~yield,data=yields2)
 yields2$value_pre[!is.na(yields2$yield)]=yields2$yield[!is.na(yields2$yield)]
 yields2=yields2 %>% group_by(var) %>% mutate(value_pre_scale=scale(value_pre))
 
 #merging with data
-yields3=dcast(yields2,district_no+district+nuts_id+year+area~var,value.var="value_pre_scale")
+yields3=dcast(yields2,district_no+district+nuts_id+year+area+yield~var,value.var="value_pre_scale")
 data_org=merge(data_org,yields3,by=c("nuts_id","year"),all.x=T,all.y=F)
 margin_map=1
 
 r <- rast("hfp-europe-geo-grid/hfp-europe-geo-grid/hfp_Europe_grid/hfp_europe/hdr.adf") #available here: https://sedac.ciesin.columbia.edu/data/set/wildareas-v2-human-footprint-geographic/data-download
+crs(r)  <- "epsg:4326"
 x <- c(xmin=min(data_org$E)-margin_map-1,xmax=max(data_org$E)+margin_map+1)
 y <- c(ymin=min(data_org$N)-margin_map-1,ymax=56+1)
 xy <- cbind(x,y)
@@ -91,7 +94,7 @@ r <- crop(r, extent(bbox(S)), snap="out")
 r2=as.data.frame(r)
 
 #### EXTRACT HFI values
-obj=project(obj,crs(r))
+obj=vect(data_org,geom=c("E","N"),crs="EPSG:4326")
 data_org$HFI=as.numeric(as.character(terra::extract(r,obj)$hfp_europe))
 
 #' Centering the variables precipitation and temperature during sampling on the mean value  
@@ -146,24 +149,22 @@ summary(m_spells)
 #' **New Model:** with weather anomalies AND year
 checkmodel=lm(year_c ~ 	Tmean_c * Psum_c + 
 						Tmean_anomaly_april_current * Psum_anomaly_april_current + 
-						Tmean_anomaly_april_prev * Psum_anomaly_april_prev + 
-						Tmean_anomaly_winter * Psum_anomaly_winter + 
-						Tmean_anomaly_meandaynr_prev * Psum_anomaly_meandaynr_prev,data=training)
+						Tmean_anomaly_winter * Psum_anomaly_winter ,data=training)
 
 
 # correct the yield of sugarbeet by climatic conditions:
-model_yield=lm(sugarbeet ~  Tmean_c * Psum_c + Tmean_anomaly_april_current * Psum_anomaly_april_current + 
-						Tmean_anomaly_winter * Psum_anomaly_winter+year ,data=training)
+model_yield=lmer(sugarbeet ~  Tmean_c * Psum_c + Tmean_anomaly_april_current * Psum_anomaly_april_current + 
+						Tmean_anomaly_winter * Psum_anomaly_winter+year_c+(1|district) ,data=training)
 summary(model_yield)
 #get the residuals plus the temporal trend not explained by climatic conditions, to build the proxy of agricultural intensification
 training$agri=residuals(model_yield)+predict(model_yield,newdata=data.frame(Tmean_c=mean(training$Tmean_c),Psum_c=mean(training$Psum_c),Tmean_anomaly_april_current=mean(training$Tmean_anomaly_april_current),
 Psum_anomaly_april_current=mean(training$Psum_anomaly_april_current),
 Tmean_anomaly_april_prev=mean(training$Tmean_anomaly_april_prev),Psum_anomaly_april_prev =mean(training$Psum_anomaly_april_prev),
 Tmean_anomaly_winter=mean(training$Tmean_anomaly_winter),Psum_anomaly_winter =mean(training$Psum_anomaly_winter),
-Tmean_anomaly_meandaynr_prev=mean(training$Tmean_anomaly_meandaynr_prev),Psum_anomaly_meandaynr_prev =mean(training$Psum_anomaly_meandaynr_prev),year=training$year))
+Tmean_anomaly_meandaynr_prev=mean(training$Tmean_anomaly_meandaynr_prev),Psum_anomaly_meandaynr_prev =mean(training$Psum_anomaly_meandaynr_prev),year_c=training$year_c,district=training$district))
 
 coco=cor(training[,c("year_c","Tmean_c","Psum_c","Tmean_anomaly_april_current","Psum_anomaly_april_current","Tmean_anomaly_april_prev",
-"Psum_anomaly_april_prev","Tmean_anomaly_winter","Psum_anomaly_winter","Tmean_anomaly_meandaynr_prev","Psum_anomaly_meandaynr_prev","agri")])
+"Psum_anomaly_april_prev","Tmean_anomaly_winter","Psum_anomaly_winter","Tmean_anomaly_meandaynr_prev","Psum_anomaly_meandaynr_prev","agri","HFI")])
 ggcorrplot(coco,lab = TRUE,hc.order = TRUE, type = "lower")
 
 
@@ -187,7 +188,7 @@ AIC(modelbis)
 modelbetroot <- gam(biomass ~ s(meandaynr) + offset(log(todaynr - fromdaynr)) + s(E, N, bs = "tp") +
                                nHerbs + nTrees + Light + ellenTemperature +
                                (Arableland + Forest + Grassland + Water)+
-							   year_c+agri+HFI+
+							   year_c+agri+
                                Tmean_c * Psum_c+
                                Tmean_anomaly_april_current * Psum_anomaly_april_current + 
                                Tmean_anomaly_april_prev * Psum_anomaly_april_prev + 
@@ -198,7 +199,7 @@ modelbetroot <- gam(biomass ~ s(meandaynr) + offset(log(todaynr - fromdaynr)) + 
                       data = training)
 objbet=summary(modelbetroot)
 objbet
-res2=data.frame(Estimate=objbet$p.coeff,se=obj$se[1:length(objbet$p.coeff)],pval=objbet$p.pv,aic=AIC(modelbetroot),resq=objbet$r.sq,varia=names(objbet$p.coeff))
+res2b=data.frame(Estimate=objbet$p.coeff,se=objbet$se[1:length(objbet$p.coeff)],pval=objbet$p.pv,aic=AIC(modelbetroot),resq=objbet$r.sq,varia=names(objbet$p.coeff))
 AIC(modelbetroot)
 
 #TABLE 1
@@ -295,14 +296,14 @@ year_c=mean(training$year_c),todaynr=10,fromdaynr=0,E=mean(training$E),N=mean(tr
 newdata1=cbind(newdata,as.data.frame(predict(modelbetroot,type="response",newdata=newdata,se.fit=TRUE)))
 newdata1$year=training$year
 
-model1=gam(fit ~ year,family = gaussian(link = "log"), method = METHOD, data = newdata1)
+model1=gam(fit ~ year,family = gaussian(link = "log"), method = METHOD, data = newdata1,weights=1/se.fit)
 b1=as.data.frame(ggpredict(model1,tem="year")$year)
 
 pl4=ggplot()+geom_point(data=newdata1,aes(x=year,y=fit/10),color="hotpink2",alpha=0.1)+
 geom_ribbon(data=b1,aes(x=x,ymin=conf.low/10,ymax=conf.high/10),alpha=0.2,fill="hotpink4")+
 geom_line(data=b1,aes(x=x,y=predicted/10),size=1.2,col="hotpink4")+theme_bw()+theme(panel.grid=element_blank(),plot.title=element_text(size=14,face="bold",hjust = 0),
 legend.position="right",panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=0))+
-ggtitle("a")+
+ggtitle("a")+ylim(c(1.85,9.6))+
 xlab("Years")+ylab("Biomass predicted by weather conditions only\n(g per day)")
 
 ### CONTRIB HABITAT
@@ -319,7 +320,7 @@ year_c=mean(training$year_c),todaynr=10,fromdaynr=0,E=mean(training$E),N=mean(tr
 
 newdata2=cbind(newdata,as.data.frame(predict(modelbetroot,type="response",newdata=newdata,se.fit=TRUE)))
 newdata2$year=training$year
-model2=gam(fit ~ year,family = gaussian(link = "log"), method = METHOD, data = newdata2)
+model2=gam(fit ~ year,family = gaussian(link = "log"), method = METHOD, data = newdata2,weights=1/se.fit)
 b2=as.data.frame(ggpredict(model2,tem="year")$year)
 
 summary(model2)
@@ -338,14 +339,14 @@ year_c=mean(training$year_c),todaynr=10,fromdaynr=0,E=mean(training$E),N=mean(tr
 
 newdata3=cbind(newdata,as.data.frame(predict(modelbetroot,type="response",newdata=newdata,se.fit=TRUE)))
 newdata3$year=training$year
-model3=gam(fit ~ year,family = gaussian(link = "log"), method = METHOD, data = newdata3)
+model3=gam(fit ~ year,family = gaussian(link = "log"), method = METHOD, data = newdata3,weights=1/se.fit)
 b3=as.data.frame(ggpredict(model3,tem="year")$year)
 
 pl9=ggplot()+geom_point(data=newdata3,aes(x=year,y=fit/10),color="coral3",alpha=0.1)+
 geom_ribbon(data=b3,aes(x=x,ymin=conf.low/10,ymax=conf.high/10),alpha=0.2,fill="coral3")+
 geom_line(data=b3,aes(x=x,y=predicted/10),size=1.2,col="coral3")+theme_bw()+theme(panel.grid=element_blank(),plot.title=element_text(size=14,face="bold",hjust = 0),
 legend.position="right",panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=0))+
-ggtitle("b")+
+ggtitle("b")+ylim(c(1.85,9.6))+
 xlab("Years")+ylab("Biomass predicted by beetroot yields only\n(g per day)")
 
 ### ALL CONTRIB
@@ -375,12 +376,22 @@ plot_grid(pl4,pl9,pl10,align="hv",ncol=3)
 dev.off();
 
 
-
-
 #### ADDITIONAL FIGURE
-
 ####################################################
-################################################################################################################ FIGURE 3
+#FIGURE 1 of the answer:
+shp=st_read("NUTS_RG_20M_2021_3035.shp") #available here: https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/administrative-units-statistical-units/nuts#nuts21
+shp=subset(shp,LEVL_CODE==0)
+shp=st_transform(shp,crs=4326)
+
+r <- raster("hfp-europe-geo-grid/hfp-europe-geo-grid/hfp_Europe_grid/hfp_europe/hdr.adf") #available here: https://sedac.ciesin.columbia.edu/data/set/wildareas-v2-human-footprint-geographic/data-download
+crs(r)  <- "epsg:4326"
+x <- c(xmin=min(data_org$E)-margin_map-1,xmax=max(data_org$E)+margin_map+1)
+y <- c(ymin=min(data_org$N)-margin_map-1,ymax=56+1)
+xy <- cbind(x,y)
+S <- SpatialPoints(xy)
+r <- crop(r, extent(bbox(S)), snap="out")
+r2=as.data.frame(rasterToPoints(r))
+
 pl7=ggplot(data=data_org,aes(x=fyear,y=biomass_adj/(todaynr-fromdaynr),fill=dataset))+geom_boxplot()+
 theme_bw()+theme(panel.grid=element_blank(),plot.title=element_text(size=14,face="bold",hjust = 0),
 legend.position="none",panel.border = element_blank(),axis.line= element_line(),axis.text.x=element_text(angle=90,vjust=0.5))+
