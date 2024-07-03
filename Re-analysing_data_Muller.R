@@ -113,7 +113,7 @@ data_org$site=as.factor(data_org$plot)
 dim(training <- subset(data_org, dataset == "training"))
 training$year <- as.double(training$year)
 training$year_c=training$year-mean(training$year)
-
+nrow(subset(training,is.na(yield)))
 #' Own data published partly Uhler et al (2021) Nat Commun. 12(1):5946, 
 #' Uhler et al. (2022) Insect Conservation and Diversity 10.1111/icad.12604, 
 #' Busse et al. (2022) Insect Conservation and Diversity 10.1111/icad.12592
@@ -183,7 +183,7 @@ modelbis <- gam(biomass ~ s(meandaynr) + offset(log(todaynr - fromdaynr)) + s(E,
 obj=summary(modelbis)
 res2=data.frame(Estimate=obj$p.coeff,se=obj$se[1:length(obj$p.coeff)],pval=obj$p.pv,aic=AIC(modelbis),resq=obj$r.sq,varia=names(obj$p.coeff))
 AIC(modelbis)
-
+exp(summary(modelbis)$p.coeff["year_c"]+c(0,-1.96*summary(modelbis)$se["year_c"],1.96*summary(modelbis)$se["year_c"]))-1
 
 modelbetroot <- gam(biomass ~ s(meandaynr) + offset(log(todaynr - fromdaynr)) + s(E, N, bs = "tp") +
                                nHerbs + nTrees + Light + ellenTemperature +
